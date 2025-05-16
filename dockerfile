@@ -1,13 +1,9 @@
 FROM php:8.2-fpm
 
-# Instalar dependencias del sistema incluyendo las necesarias para Node.js
+# Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
-    git unzip curl \
-    libzip-dev zip \
-    gnupg ca-certificates \
-    && curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
-    && apt-get install -y nodejs \
-    && docker-php-ext-install zip pdo pdo_mysql
+    git unzip curl libzip-dev zip nodejs npm && \
+    docker-php-ext-install zip pdo pdo_mysql
 
 # Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -15,21 +11,14 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Establecer directorio de trabajo
 WORKDIR /var/www
 
-# Copiar solo los archivos necesarios primero para aprovechar la caché de Docker
-COPY package.json package-lock.json* ./
-COPY composer.json composer.lock* ./
+# Copiar todos los archivos del proyecto
+COPY . .
 
 # Instalar dependencias PHP
 RUN composer install --no-dev --optimize-autoloader
 
-# Instalar dependencias de Node.js
-RUN npm ci && npm cache clean --force
-
-# Copiar el resto de los archivos
-COPY . .
-
-# Compilar assets con Vite
-RUN npm run build
+# Instalar y compilar assets con Vite
+RUN npm install && npm run build
 
 # Establecer permisos para Laravel
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
