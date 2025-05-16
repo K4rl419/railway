@@ -1,31 +1,35 @@
 FROM php:8.2-fpm
 
-# Instalar dependencias del sistema
+# 1. Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
-    git unzip curl libzip-dev zip nodejs npm && \
-    docker-php-ext-install zip pdo pdo_mysql
+    git unzip curl libzip-dev \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g npm@latest \
+    && docker-php-ext-install zip pdo pdo_mysql mbstring xml tokenizer pcntl
 
-# Instalar Composer
+# 2. Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Establecer directorio de trabajo
+# 3. Configurar directorio y permisos
 WORKDIR /var/www
+RUN chown -R www-data:www-data /var/www
 
-# Copiar todos los archivos del proyecto
-COPY . .
+# 4. Copiar archivos con permisos correctos
+COPY --chown=www-data:www-data . .
 
-# Instalar dependencias PHP
-RUN composer install --no-dev --optimize-autoloader
+# 5. Instalar dependencias PHP
+USER www-data
+RUN composer clear-cache && \
+    composer install --no-dev --optimize-autoloader --no-interaction
 
-# Instalar y compilar assets con Vite
+# 6. Instalar dependencias JS y compilar
 RUN npm install && npm run build
 
-# Establecer permisos para Laravel
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+# 7. Configurar Laravel
+RUN cp .env.example .env && \
+    php artisan key:generate && \
+    chmod -R 775 storage bootstrap/cache
 
-# Exponer el puerto del servidor embebido
 EXPOSE 8000
-
-# Iniciar Laravel
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
